@@ -25,6 +25,9 @@ enum Color {
 
 static struct RbNode* CreateRbNode(int color, int key, struct RbNode* nil);
 static struct RbNode* FindRoot(const struct RbNode* n);
+static void DumpNode(FILE* fileDot, const struct RbNode* n, 
+                                    const struct RbNode* nil);
+static void ClearNode(struct RbNode* n, const struct RbNode* nil);
 
 static struct RbNode* GetGrandparent(const struct RbNode* n);
 static struct RbNode* GetUncle      (const struct RbNode* n);
@@ -110,6 +113,25 @@ static void DumpNode(FILE* fileDot, const struct RbNode* n,
             "color = \"#FFFFFF\", fontcolor = \"#000000\"];\n", n->key);
         fprintf(fileDot, "\t\tkey_%d -> nil_right_key_%d;\n", n->key, n->key);
     } 
+}
+
+static void ClearNode(struct RbNode* n, const struct RbNode* nil) {
+    assert(n);
+    assert(nil);
+
+    if (n->left != nil)
+        ClearNode(n->left, nil);
+
+    if (n->right != nil)
+        ClearNode(n->right, nil);
+
+    n->color  = 0;
+    n->key    = 0;
+    n->left   = NULL;
+    n->right  = NULL;
+    n->parent = NULL;
+
+    free(n);
 }
 
 
@@ -295,7 +317,20 @@ int RbConstruct(struct RbTree** rbTree) {
     return 0;
 }
 
-int RbDestructor(struct RbTree* rbTree);
+int RbDestructor(struct RbTree* rbTree) {
+    if(rbTree == NULL)
+        return RB_EINVAL;
+
+    ClearNode(rbTree->root, rbTree->nil);
+    rbTree->root = NULL;
+
+    free(rbTree->nil);
+    rbTree->nil = NULL;
+
+    free(rbTree);
+
+    return 0;
+}
 
 int RbInsert (struct RbTree* rbTree, int key) {
     if (rbTree == NULL)
