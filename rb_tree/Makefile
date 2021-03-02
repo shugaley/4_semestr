@@ -15,7 +15,7 @@ DIR_INC       = include
 DIR_SRC       = src
 OBJ           = $(addprefix $(DIR_BUILD)/,$(OBJNAME))
 OBJ_WITH_TEST = $(addprefix $(DIR_BUILD_WITH_TEST)/,$(OBJNAME))
-OBJNAME       = rb_tree.o
+OBJNAME       = RbTree.o
 
 
 EXEC_TEST    = $(addprefix $(DIR_EXEC)/,test.out)
@@ -24,7 +24,7 @@ FLAGS_TEST   = $(FLAGS)
 CFLAGS_TEST  = $(FLAGS_TEST )
 INC_TEST     = $(INC)
 DIR_SRC_TEST = test
-OBJ_TEST     = $(addprefix $(DIR_BUILD)/,unit_test.o)
+OBJ_TEST     = $(addprefix $(DIR_BUILD)/,main.o RbTreeUnitTest.o)
 
 # ------------------------------------------------------------------------------
 

@@ -1,9 +1,10 @@
 
-#include "rb_tree.h"
+#include "RbTreeUnitTest.h"
 
-int main()
-{
-    struct RbTree* rbTree = NULL;
+#include "RbTree.h"
+
+void RbTestAll() {
+    struct RbTree* rbTree;
     RbConstruct(&rbTree);
 
     RbInsert(rbTree, 10);
@@ -20,6 +21,4 @@ int main()
     fclose(dot);
 
     RbDestructor(rbTree);
-
-    return 0;
 }

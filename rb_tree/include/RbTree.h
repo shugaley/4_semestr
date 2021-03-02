@@ -3,7 +3,6 @@
 
 #include "stdio.h"
 
-
 struct RbTree;
 struct RbNode;
 

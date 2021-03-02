@@ -1,5 +1,5 @@
 
-#include "rb_tree.h"
+#include "RbTree.h"
 
 #include "assert.h"
 #include "stdlib.h"
@@ -391,7 +391,7 @@ int RbFind(const struct RbTree* rbTree, int key, struct RbNode* rbNode) {
         else if (rbNode->key < key)
             rbNode = rbNode->right;
         else 
-            return rbNode;
+            return 0;
     }
 
     rbNode = NULL;
