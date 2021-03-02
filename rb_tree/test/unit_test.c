@@ -19,5 +19,7 @@ int main()
     RbDump(dot, rbTree);
     fclose(dot);
 
+    RbDestructor(rbTree);
+
     return 0;
 }
