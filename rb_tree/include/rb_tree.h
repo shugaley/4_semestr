@@ -19,8 +19,10 @@ int RbDestructor(struct RbTree*  rbTree);
 int RbInsert (      struct RbTree* rbTree, int key);
 int RbErase  (      struct RbTree* rbTree, int key);
 int RbFind   (const struct RbTree* rbTree, int key, struct RbNode* rbNode);
-int RbForeach(      struct RbTree*, 
-              int (*func)(struct RbTree*, struct RbNode*, void*), void*);
+int RbForeach(      struct RbTree* rbTree, 
+              int (*function)(struct RbTree* rbTree, 
+                              struct RbNode* rbNode, void* data), 
+              void* data);
 
 int RbDump(FILE* fileDot, struct RbTree* rbTree);
 

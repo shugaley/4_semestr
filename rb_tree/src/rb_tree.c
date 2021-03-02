@@ -24,10 +24,14 @@ enum Color {
 };
 
 static struct RbNode* CreateRbNode(int color, int key, struct RbNode* nil);
+static void ClearNode(struct RbNode* n, const struct RbNode* nil);
 static struct RbNode* FindRoot(const struct RbNode* n);
+static void ForeachNode(struct RbTree* rbTree, 
+                        int (*function)(struct RbTree* rbTree, 
+                                        struct RbNode* rbNode, void* data), 
+                        void* data, struct RbNode* n);
 static void DumpNode(FILE* fileDot, const struct RbNode* n, 
                                     const struct RbNode* nil);
-static void ClearNode(struct RbNode* n, const struct RbNode* nil);
 
 static struct RbNode* GetGrandparent(const struct RbNode* n);
 static struct RbNode* GetUncle      (const struct RbNode* n);
@@ -63,6 +67,26 @@ static struct RbNode* CreateRbNode(int color, int key, struct RbNode* nil) {
     return n;
 }
 
+static void ClearNode(struct RbNode* n, const struct RbNode* nil) {
+
+    assert(n);
+    assert(nil);
+
+    if (n->left != nil)
+        ClearNode(n->left, nil);
+
+    if (n->right != nil)
+        ClearNode(n->right, nil);
+
+    n->color  = 0;
+    n->key    = 0;
+    n->left   = NULL;
+    n->right  = NULL;
+    n->parent = NULL;
+
+    free(n);
+}
+
 static struct RbNode* FindRoot(const struct RbNode* n) {
     assert(n);
 
@@ -71,6 +95,21 @@ static struct RbNode* FindRoot(const struct RbNode* n) {
         root = root->parent;
 
     return (struct RbNode*)root;
+}
+
+static void ForeachNode(struct RbTree* rbTree, 
+                        int (*function)(struct RbTree* rbTree, 
+                                        struct RbNode* rbNode, void* data), 
+                        void* data, struct RbNode* n) {
+    assert(rbTree);
+    assert(function);
+    assert(data);
+    assert(n);
+
+    if (n->left != rbTree->nil)
+        ForeachNode(rbTree, function, data, n->left);
+    if (n->right != rbTree->nil)
+        ForeachNode(rbTree, function, data, n->right);
 }
 
 static void DumpNode(FILE* fileDot, const struct RbNode* n, 
@@ -113,25 +152,6 @@ static void DumpNode(FILE* fileDot, const struct RbNode* n,
             "color = \"#FFFFFF\", fontcolor = \"#000000\"];\n", n->key);
         fprintf(fileDot, "\t\tkey_%d -> nil_right_key_%d;\n", n->key, n->key);
     } 
-}
-
-static void ClearNode(struct RbNode* n, const struct RbNode* nil) {
-    assert(n);
-    assert(nil);
-
-    if (n->left != nil)
-        ClearNode(n->left, nil);
-
-    if (n->right != nil)
-        ClearNode(n->right, nil);
-
-    n->color  = 0;
-    n->key    = 0;
-    n->left   = NULL;
-    n->right  = NULL;
-    n->parent = NULL;
-
-    free(n);
 }
 
 
@@ -359,9 +379,36 @@ int RbInsert (struct RbTree* rbTree, int key) {
 
 int RbErase(struct RbTree* rbTree, int key);
 
-int RbFind(const struct RbTree* rbTree, int key, struct RbNode* rbNode);
+int RbFind(const struct RbTree* rbTree, int key, struct RbNode* rbNode) {
+    if (rbTree == NULL)
+        return RB_EINVAL;
 
-int RbForeach(struct RbTree*, int (*func)(struct RbTree*, struct RbNode*, void*), void*);
+    rbNode = rbTree->root;
+
+    while (rbNode != rbTree->nil) {
+        if (rbNode->key > key)
+            rbNode = rbNode->left;
+        else if (rbNode->key < key)
+            rbNode = rbNode->right;
+        else 
+            return rbNode;
+    }
+
+    rbNode = NULL;
+    return 0;
+}
+
+int RbForeach(struct RbTree* rbTree, 
+              int (*function)(struct RbTree* rbTree, 
+                              struct RbNode* rbNode, void* data), 
+              void* data) {
+
+    if(rbTree == NULL || function == NULL)
+        return RB_EINVAL;             
+
+    ForeachNode(rbTree, function, data, rbTree->root);
+    return 0;
+}
 
 int RbDump(FILE* fileDot, struct RbTree* rbTree) {
     if (rbTree == NULL || fileDot == NULL) 
