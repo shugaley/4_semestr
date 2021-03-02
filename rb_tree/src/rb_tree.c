@@ -23,12 +23,11 @@ enum Color {
     BLACK = 2,
 };
 
-static struct RbNode* CreateRbNode(int color, int key, 
-                                    const struct RbNode* nil);
+static struct RbNode* CreateRbNode(int color, int key, struct RbNode* nil);
 static struct RbNode* FindRoot(const struct RbNode* n);
 
-static struct RbNode* GetGrandparent(struct RbNode* n);
-static struct RbNode* GetUncle(struct RbNode* n);
+static struct RbNode* GetGrandparent(const struct RbNode* n);
+static struct RbNode* GetUncle      (const struct RbNode* n);
 
 static void InsertNewNode(struct RbNode* nNew, 
                           struct RbNode* n, const struct RbNode* nil);
@@ -44,9 +43,7 @@ static void RotateRight(struct RbNode* n);
 
 // ==== Other helper functions =================================================
 
-static struct RbNode* CreateRbNode(int color, int key, 
-                                   const struct RbNode* nil) {
-    assert(nil);
+static struct RbNode* CreateRbNode(int color, int key, struct RbNode* nil) {
     assert(color == BLACK || color == RED);
 
     struct RbNode* n = (struct RbNode*)calloc(1, sizeof(*n));
@@ -66,17 +63,59 @@ static struct RbNode* CreateRbNode(int color, int key,
 static struct RbNode* FindRoot(const struct RbNode* n) {
     assert(n);
 
-    struct RbNode* root = n;
+    const struct RbNode* root = n;
     while (root->parent)
         root = root->parent;
 
-    return root;
+    return (struct RbNode*)root;
+}
+
+static void DumpNode(FILE* fileDot, const struct RbNode* n, 
+                                    const struct RbNode* nil) {
+    assert(n);
+    assert(fileDot);
+
+    fprintf(fileDot, "\n\t\tkey_%d [label = \"%d\", ", n->key, n->key);
+    if (n->color == RED) 
+        fprintf(fileDot, "color = \"#FF0000\", fontcolor = \"#FFFFFF\" "
+                         "style = \"filled\", fillcolor = \"#FF0000\"]\n");
+    else 
+        fprintf(fileDot, "color = \"#000000\", fontcolor = \"#FFFFFF\" "
+                         "style = \"filled\", fillcolor = \"#000000\"]\n");
+
+    if (n->left != nil) {
+        fprintf(fileDot, "\t\tkey_%d -> key_%d;\n", n->key, n->left->key);
+        DumpNode(fileDot, n->left, nil);
+        fprintf(fileDot, "\t\t{\n\t\t\trank = same;\n"
+                         "\t\t\tkey_%d -> ", n->left->key);
+    } 
+    else { 
+        fprintf(fileDot, 
+            "\n\t\tnil_left_key_%d [label = \"nil\", shape = \"diamond\", "
+            "color = \"#FFFFFF\", fontcolor = \"#000000\"];\n", n->key);
+        fprintf(fileDot, "\t\tkey_%d -> nil_left_key_%d;\n", n->key, n->key);
+        fprintf(fileDot, "\t\t{\n\t\t\trank = same;\n"
+                         "\t\t\tnil_left_key_%d -> ", n->key);
+    }
+
+    if (n->right != nil) {
+        fprintf(fileDot, "key_%d [color=invis];\n\t\t}\n",   n->right->key);
+        fprintf(fileDot, "\t\tkey_%d -> key_%d;\n", n->key, n->right->key);
+        DumpNode(fileDot, n->right, nil);
+    }
+    else {
+        fprintf(fileDot, "nil_right_key_%d [color=invis];\n\t\t}\n", n->key);
+        fprintf(fileDot, 
+            "\n\t\tnil_right_key_%d [label = \"nil\", shape = \"diamond\", "
+            "color = \"#FFFFFF\", fontcolor = \"#000000\"];\n", n->key);
+        fprintf(fileDot, "\t\tkey_%d -> nil_right_key_%d;\n", n->key, n->key);
+    } 
 }
 
 
 // ==== Getter relatives functions =============================================
 
-static struct RbNode* GetGrandparent(struct RbNode* n) {
+static struct RbNode* GetGrandparent(const struct RbNode* n) {
 
     assert(n);
 
@@ -86,7 +125,7 @@ static struct RbNode* GetGrandparent(struct RbNode* n) {
         return NULL;
 }
 
-static struct RbNode* GetUncle(struct RbNode* n) {
+static struct RbNode* GetUncle(const struct RbNode* n) {
 
     assert(n);
 
@@ -132,7 +171,7 @@ static void InsertCase1(struct RbNode* n) {
     if (n->parent == NULL)
         n->color = BLACK;
     else
-        insert_case2(n);
+        InsertCase2(n);
 }
 
 static void InsertCase2(const struct RbNode* n) {
@@ -141,7 +180,7 @@ static void InsertCase2(const struct RbNode* n) {
     if (n->parent->color == BLACK)
         return; // Tree is still valid 
     else
-        insert_case3(n);
+        InsertCase3(n);
 }
 
 static void InsertCase3(const struct RbNode* n) {
@@ -156,10 +195,10 @@ static void InsertCase3(const struct RbNode* n) {
         struct RbNode* gp = GetGrandparent(n);
         gp->color = RED;
 
-        insert_case1(gp);
+        InsertCase1(gp);
     } 
     else 
-        insert_case4(n);
+        InsertCase4(n);
 }
 
 static void InsertCase4(const struct RbNode* n) {
@@ -176,7 +215,7 @@ static void InsertCase4(const struct RbNode* n) {
         n = n->right;
     }
 
-    insert_case5(n);
+    InsertCase5(n);
 }
 
 static void InsertCase5(const struct RbNode* n) {
@@ -242,18 +281,18 @@ static void RotateRight(struct RbNode* n) {
 // =============================================================================
 // ==== API ====================================================================
 
-int RbConstruct(struct RbTree* rbTree) {
-    struct RbTree* rbTree = (struct RbTree*)calloc(1, sizeof(*rbTree));
-    if (rbTree == NULL) 
+int RbConstruct(struct RbTree** rbTree) {
+    *rbTree = (struct RbTree*)calloc(1, sizeof(**rbTree));
+    if (*rbTree == NULL) 
         return RB_ENOMEM;
+     
+    (*rbTree)->nil = CreateRbNode(BLACK, 0, NULL);
+    if ((*rbTree)->nil == NULL)
+        return RB_ENOMEM;
+
+    (*rbTree)->root = (*rbTree)->nil;
     
-    rbTree->nil = CreateRbNode(BLACK, 0, rbTree->nil);
-    if (rbTree->nil == NULL)
-        return RB_ENOMEM;
-
-    rbTree->root = rbTree->nil;
-
-    return rbTree;
+    return 0;
 }
 
 int RbDestructor(struct RbTree* rbTree);
@@ -276,6 +315,8 @@ int RbInsert (struct RbTree* rbTree, int key) {
     if (rbTree->root != rbTree->nil)
         InsertNewNode(rbNodeNew, rbTree->root, rbTree->nil);
 
+    InsertCase1(rbNodeNew);
+
     rbTree->root = FindRoot(rbNodeNew);
 
     return 0;
@@ -287,6 +328,19 @@ int RbFind(const struct RbTree* rbTree, int key, struct RbNode* rbNode);
 
 int RbForeach(struct RbTree*, int (*func)(struct RbTree*, struct RbNode*, void*), void*);
 
-int RbDump(struct RbTree* rbTree, FILE* dot);
+int RbDump(FILE* fileDot, struct RbTree* rbTree) {
+    if (rbTree == NULL || fileDot == NULL) 
+        return RB_EINVAL;
 
+    fprintf(fileDot, "digraph RbTree {\n");
+    fprintf(fileDot, 
+        "\tnode [shape = \"ellipse\", color = \"#000000\", fontsize = 12];\n"
+        "\tedge [color = \"#000000\", fontsize = 12];\n\n");
+
+    DumpNode(fileDot, rbTree->root, rbTree->nil);
+
+    fprintf(fileDot, "}\n");
+
+    return 0;
+}
 
