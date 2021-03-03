@@ -23,6 +23,12 @@ enum Color {
     BLACK = 2,
 };
 
+#ifndef TEST
+#define CALLOC(n, size) calloc(n, size)
+#else
+#define CALLOC(n, size) TestCalloc(n, size)
+#endif
+
 static struct RbNode* CreateRbNode(int color, int key, struct RbNode* nil);
 static void ClearNode(struct RbNode* n, const struct RbNode* nil);
 static struct RbNode* FindRoot(const struct RbNode* n);
@@ -47,13 +53,15 @@ static void InsertCase5(const struct RbNode* n);
 static void RotateLeft(struct RbNode* n);
 static void RotateRight(struct RbNode* n);
 
+static void* TestCalloc(size_t n, size_t size);
+
 
 // ==== Other helper functions =================================================
 
 static struct RbNode* CreateRbNode(int color, int key, struct RbNode* nil) {
     assert(color == BLACK || color == RED);
 
-    struct RbNode* n = (struct RbNode*)calloc(1, sizeof(*n));
+    struct RbNode* n = (struct RbNode*)CALLOC(1, sizeof(*n));
     if (n == NULL)
         return NULL; 
 
@@ -320,11 +328,29 @@ static void RotateRight(struct RbNode* n) {
 }
 
 
+// ==== Tester functions =======================================================
+
+static void* TestCalloc(size_t n, size_t size) {
+    static size_t num = 0;
+
+    if(num == 0 || num == 2 || num == 5) {
+        num++;
+        return NULL;
+    }
+
+    num++;
+    return calloc(n, size);
+}
+
+
 // =============================================================================
 // ==== API ====================================================================
 
 int RbConstruct(struct RbTree** rbTree) {
-    *rbTree = (struct RbTree*)calloc(1, sizeof(**rbTree));
+    if(rbTree == NULL)
+        return RB_EINVAL;
+
+    *rbTree = (struct RbTree*)CALLOC(1, sizeof(**rbTree));
     if (*rbTree == NULL) 
         return RB_ENOMEM;
      
@@ -380,7 +406,7 @@ int RbInsert (struct RbTree* rbTree, int key) {
 int RbErase(struct RbTree* rbTree, int key);
 
 int RbFind(const struct RbTree* rbTree, int key, struct RbNode** rbNode) {
-    if (rbTree == NULL)
+    if (rbTree == NULL || rbNode == NULL)
         return RB_EINVAL;
 
     *rbNode = rbTree->root;
@@ -403,7 +429,7 @@ int RbForeach(struct RbTree* rbTree,
                               struct RbNode* rbNode, void* data), 
               void* data) {
 
-    if(rbTree == NULL || function == NULL)
+    if(rbTree == NULL || function == NULL || data == NULL)
         return RB_EINVAL;             
 
     ForeachNode(rbTree, function, data, rbTree->root);
