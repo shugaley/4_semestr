@@ -8,7 +8,7 @@ DIR_BUILD_WITH_TEST = $(DIR_BUILD)/test
 
 
 LIB              = $(addprefix $(DIR_LIB)/,libRbTree.a)
-FLAGS            = -MD -g -Wall
+FLAGS            = -MD -g -Wall -fprofile-arcs -ftest-coverage
 FLAGS_WITH_TEST  = $(FLAGS) $(GCOV_FLAGS)
 CFLAGS           = $(FLAGS) 
 CFLAGS_WITH_TEST = $(FLAGS_WITH_TEST) 
@@ -31,7 +31,6 @@ DIR_SRC_TEST = test
 OBJ_TEST     = $(addprefix $(DIR_BUILD)/,main.o RbTreeUnitTest.o)
 
 
-GCOV_FLAGS = -fprofile-arcs -ftest-coverage
 
 
 # ------------------------------------------------------------------------------
