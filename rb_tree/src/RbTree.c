@@ -53,7 +53,7 @@ static void InsertCase5(const struct RbNode* n);
 static void RotateLeft(struct RbNode* n);
 static void RotateRight(struct RbNode* n);
 
-static void* TestCalloc(size_t n, size_t size);
+static void* TestCalloc(size_t n, size_t size) __attribute_used__;
 
 
 // ==== Other helper functions =================================================
