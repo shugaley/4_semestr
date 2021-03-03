@@ -19,7 +19,7 @@ static void TestForeach();
 static void TestDump();
 
 static void FillTree(struct RbTree* rbTree);
-static void SumKeys(struct RbTree* rbTree, struct RbNode* n, int* sum);
+static int SumKeys(struct RbTree* rbTree, struct RbNode* n, int* sum);
 
 // ==== Tester functions =======================================================
 
@@ -62,7 +62,10 @@ static void TestForeach() {
     FillTree(rbTree);
 
     int sumKeys = 0;
-    assert(RbForeach(rbTree, SumKeys, &sumKeys) == 0);
+    assert(RbForeach(rbTree, 
+                     (int(*)(struct RbTree*, struct RbNode*, void*))SumKeys, 
+                     &sumKeys) 
+            == 0);
 
     assert(RbDestructor(rbTree) == 0);
 }
@@ -88,6 +91,8 @@ static void FillTree(struct RbTree* rbTree) {
 
     int baseKey = rand() % (RANDOM_MAX + 1 - RANDOM_MIN) + RANDOM_MIN;
 
+    printf("%d\n", baseKey);
+
     assert(RbInsert(rbTree, baseKey)                == 0);
     assert(RbInsert(rbTree, baseKey + KEY_STEP * 2) == 0);
     assert(RbInsert(rbTree, baseKey + KEY_STEP * 1) == 0);
@@ -100,12 +105,15 @@ static void FillTree(struct RbTree* rbTree) {
     assert(RbInsert(rbTree, baseKey + KEY_STEP * 6) == 0);
 }
 
-static void SumKeys(struct RbTree* rbTree, struct RbNode* n, int* sum) {
-    assert(rbTree);
-    assert(n);
-    assert(sum);
+static int SumKeys(struct RbTree* rbTree, struct RbNode* n, int* sum) {
+    if (rbTree == NULL || n == NULL || sum == NULL)
+        return RB_EINVAL;
 
-    assert(RbGetKey(n, sum) == 0);
+    int res = RbGetKey(n, sum);
+    if (res != 0)
+        return res;
+
+    return 0;
 }
 
 
