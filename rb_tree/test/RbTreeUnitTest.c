@@ -91,8 +91,6 @@ static void FillTree(struct RbTree* rbTree) {
 
     int baseKey = rand() % (RANDOM_MAX + 1 - RANDOM_MIN) + RANDOM_MIN;
 
-    printf("%d\n", baseKey);
-
     assert(RbInsert(rbTree, baseKey)                == 0);
     assert(RbInsert(rbTree, baseKey + KEY_STEP * 2) == 0);
     assert(RbInsert(rbTree, baseKey + KEY_STEP * 1) == 0);
