@@ -13,6 +13,7 @@ FLAGS_WITH_TEST  = $(FLAGS)
 CFLAGS           = $(FLAGS) 
 CFLAGS_WITH_TEST = $(FLAGS_WITH_TEST) 
 INC              = -I$(DIR_INC)
+DEF 			 = -DNDEBUG
 DEF_WITH_TEST    = -DTEST
 DIR_INC          = include
 DIR_SRC          = src
@@ -66,7 +67,7 @@ $(OBJ_TEST) : | dirs
 # ------------------------------------------------------------------------------
 
 $(DIR_BUILD)/%.o : $(DIR_SRC)/%.c 
-	$(CC) -c $(CFLAGS) $(INC) -o $@ $<
+	$(CC) -c $(CFLAGS) $(INC) $(DEF) -o $@ $<
 
 $(DIR_BUILD_WITH_TEST)/%.o : $(DIR_SRC)/%.c 
 	$(CC) -c $(CFLAGS_WITH_TEST) $(INC) $(DEF_WITH_TEST) -o $@ $<
