@@ -76,7 +76,7 @@ static void TestDump() {
 
     FillTree(rbTree);
 
-    FILE* dot = fopen("dot", "w");
+    FILE* dot = fopen("out/dot", "w");
     RbDump(dot, rbTree);
     fclose(dot);
 
