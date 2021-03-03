@@ -125,7 +125,7 @@ static void DumpNode(FILE* fileDot, const struct RbNode* n,
     assert(n);
     assert(fileDot);
 
-    fprintf(fileDot, "\n\t\tkey_%d [label = \"%d\", ", n->key, n->key);
+    fprintf(fileDot, "\n\t\t\"key_%d\" [label = \"%d\", ", n->key, n->key);
     if (n->color == RED) 
         fprintf(fileDot, "color = \"#FF0000\", fontcolor = \"#FFFFFF\" "
                          "style = \"filled\", fillcolor = \"#FF0000\"]\n");
@@ -134,31 +134,31 @@ static void DumpNode(FILE* fileDot, const struct RbNode* n,
                          "style = \"filled\", fillcolor = \"#000000\"]\n");
 
     if (n->left != nil) {
-        fprintf(fileDot, "\t\tkey_%d -> key_%d;\n", n->key, n->left->key);
+        fprintf(fileDot, "\t\t\"key_%d\" -> \"key_%d\";\n", n->key, n->left->key);
         DumpNode(fileDot, n->left, nil);
         fprintf(fileDot, "\t\t{\n\t\t\trank = same;\n"
-                         "\t\t\tkey_%d -> ", n->left->key);
+                         "\t\t\t\"key_%d\" -> ", n->left->key);
     } 
     else { 
         fprintf(fileDot, 
-            "\n\t\tnil_left_key_%d [label = \"nil\", shape = \"diamond\", "
+            "\n\t\t\"nil_left_key_%d\" [label = \"nil\", shape = \"diamond\", "
             "color = \"#FFFFFF\", fontcolor = \"#000000\"];\n", n->key);
-        fprintf(fileDot, "\t\tkey_%d -> nil_left_key_%d;\n", n->key, n->key);
+        fprintf(fileDot, "\t\t\"key_%d\" -> \"nil_left_key_%d\";\n", n->key, n->key);
         fprintf(fileDot, "\t\t{\n\t\t\trank = same;\n"
-                         "\t\t\tnil_left_key_%d -> ", n->key);
+                         "\t\t\t\"nil_left_key_%d\" -> ", n->key);
     }
 
     if (n->right != nil) {
-        fprintf(fileDot, "key_%d [color=invis];\n\t\t}\n",   n->right->key);
-        fprintf(fileDot, "\t\tkey_%d -> key_%d;\n", n->key, n->right->key);
+        fprintf(fileDot, "\"key_%d\" [color=invis];\n\t\t}\n",   n->right->key);
+        fprintf(fileDot, "\t\t\"key_%d\" -> \"key_%d\";\n", n->key, n->right->key);
         DumpNode(fileDot, n->right, nil);
     }
     else {
-        fprintf(fileDot, "nil_right_key_%d [color=invis];\n\t\t}\n", n->key);
+        fprintf(fileDot, "\"nil_right_key_%d\" [color=invis];\n\t\t}\n", n->key);
         fprintf(fileDot, 
-            "\n\t\tnil_right_key_%d [label = \"nil\", shape = \"diamond\", "
+            "\n\t\t\"nil_right_key_%d\" [label = \"nil\", shape = \"diamond\", "
             "color = \"#FFFFFF\", fontcolor = \"#000000\"];\n", n->key);
-        fprintf(fileDot, "\t\tkey_%d -> nil_right_key_%d;\n", n->key, n->key);
+        fprintf(fileDot, "\t\t\"key_%d\" -> \"nil_right_key_%d\";\n", n->key, n->key);
     } 
 }
 
