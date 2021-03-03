@@ -114,6 +114,8 @@ static void ForeachNode(struct RbTree* rbTree,
     assert(data);
     assert(n);
 
+    function(rbTree, n, data);
+
     if (n->left != rbTree->nil)
         ForeachNode(rbTree, function, data, n->left);
     if (n->right != rbTree->nil)
