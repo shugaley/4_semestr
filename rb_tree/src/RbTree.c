@@ -446,7 +446,7 @@ int RbGetKey (const struct RbNode* rbNode, int* key) {
     return 0;
 }
 
-int RbDump(FILE* fileDot, struct RbTree* rbTree) {
+int RbDump(FILE* fileDot, const struct RbTree* rbTree) {
     if (rbTree == NULL || fileDot == NULL) 
         return RB_EINVAL;
 

@@ -24,6 +24,6 @@ int RbForeach(      struct RbTree* rbTree,
                               struct RbNode* rbNode, void* data), 
               void* data);
 
-int RbDump(FILE* fileDot, struct RbTree* rbTree);
+int RbDump(FILE* fileDot, const struct RbTree* rbTree);
 
 #endif //RB_TREE_RB_TREE_H
