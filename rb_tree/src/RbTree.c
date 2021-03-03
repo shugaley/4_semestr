@@ -355,8 +355,10 @@ int RbConstruct(struct RbTree** rbTree) {
         return RB_ENOMEM;
      
     (*rbTree)->nil = CreateRbNode(BLACK, 0, NULL);
-    if ((*rbTree)->nil == NULL)
+    if ((*rbTree)->nil == NULL) {
+        free (*rbTree);
         return RB_ENOMEM;
+    }
 
     (*rbTree)->root = (*rbTree)->nil;
     
