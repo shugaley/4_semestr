@@ -436,6 +436,14 @@ int RbForeach(struct RbTree* rbTree,
     return 0;
 }
 
+int RbGetKey (const struct RbNode* rbNode, int* key) {
+    if (rbNode == NULL || key == NULL)
+        return RB_EINVAL;
+
+    *key = rbNode->key;
+    return 0;
+}
+
 int RbDump(FILE* fileDot, struct RbTree* rbTree) {
     if (rbTree == NULL || fileDot == NULL) 
         return RB_EINVAL;

@@ -15,9 +15,11 @@ static const int KEY_STEP = 10;
 static void TestCalloc();
 static void TestEinval();
 static void TestInsert();
+static void TestForeach();
 static void TestDump();
 
 static void FillTree(struct RbTree* rbTree);
+static void SumKeys(struct RbTree* rbTree, struct RbNode* n, int* sum);
 
 // ==== Tester functions =======================================================
 
@@ -38,6 +40,7 @@ static void TestEinval() {
     assert(RbConstruct(NULL)           == RB_EINVAL);
     assert(RbInsert(NULL, rand())      == RB_EINVAL);
     assert(RbFind(NULL, rand(), NULL)  == RB_EINVAL); 
+    assert(RbGetKey(NULL, NULL)        == RB_EINVAL);
     assert(RbForeach(NULL, NULL, NULL) == RB_EINVAL);
     assert(RbDump(NULL, NULL)          == RB_EINVAL);
     assert(RbDestructor(NULL)          == RB_EINVAL);
@@ -49,7 +52,19 @@ static void TestInsert() {
 
     FillTree(rbTree);
 
-    assert(RbDestructor(NULL) == RB_EINVAL);
+    assert(RbDestructor(rbTree) == 0);
+}
+
+static void TestForeach() {
+    struct RbTree* rbTree = NULL;
+    assert(RbConstruct(&rbTree) == 0);
+
+    FillTree(rbTree);
+
+    int sumKeys = 0;
+    assert(RbForeach(rbTree, SumKeys, &sumKeys) == 0);
+
+    assert(RbDestructor(rbTree) == 0);
 }
 
 static void TestDump() {
@@ -62,8 +77,9 @@ static void TestDump() {
     RbDump(dot, rbTree);
     fclose(dot);
 
-    assert(RbDestructor(NULL) == RB_EINVAL);
+    assert(RbDestructor(rbTree) == 0);
 }
+
 
 // ==== Help finctions =========================================================
 
@@ -73,15 +89,23 @@ static void FillTree(struct RbTree* rbTree) {
     int baseKey = rand() % (RANDOM_MAX + 1 - RANDOM_MIN) + RANDOM_MIN;
 
     assert(RbInsert(rbTree, baseKey)                == 0);
-    assert(RbInsert(rbTree, baseKey + KEY_STEP)     == 0);
     assert(RbInsert(rbTree, baseKey + KEY_STEP * 2) == 0);
+    assert(RbInsert(rbTree, baseKey + KEY_STEP * 1) == 0);
     assert(RbInsert(rbTree, baseKey + KEY_STEP * 3) == 0);
-    assert(RbInsert(rbTree, baseKey - KEY_STEP * 1) == 0);
     assert(RbInsert(rbTree, baseKey - KEY_STEP * 2) == 0);
+    assert(RbInsert(rbTree, baseKey - KEY_STEP * 1) == 0);
     assert(RbInsert(rbTree, baseKey + KEY_STEP * 4) == 0);
     assert(RbInsert(rbTree, baseKey + KEY_STEP * 5) == 0);
     assert(RbInsert(rbTree, baseKey + KEY_STEP * 6) == 0);
     assert(RbInsert(rbTree, baseKey + KEY_STEP * 6) == 0);
+}
+
+static void SumKeys(struct RbTree* rbTree, struct RbNode* n, int* sum) {
+    assert(rbTree);
+    assert(n);
+    assert(sum);
+
+    assert(RbGetKey(n, sum) == 0);
 }
 
 
@@ -94,4 +118,5 @@ void RbTestAll() {
     TestEinval();
     TestInsert();
     TestDump();
+    TestForeach();
 }
