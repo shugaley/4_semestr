@@ -356,12 +356,12 @@ int RbInsert (struct RbTree* rbTree, int key) {
     if (rbTree == NULL)
         return RB_EINVAL;
     
-    // struct RbNode* rbNodeSearch = NULL;
-    // int res = RbFind(rbTree, key, rbNodeSearch);
-    // if (res != 0)
-    //     return res;
-    // if (rbNodeSearch != NULL)
-    //     return 0;
+    struct RbNode* rbNodeSearch = NULL;
+    int res = RbFind(rbTree, key, &rbNodeSearch);
+    if (res != 0)
+        return res;
+    if (rbNodeSearch != NULL)
+        return 0;
 
     struct RbNode* rbNodeNew = CreateRbNode(RED, key, rbTree->nil);
     if (rbNodeNew == NULL)
@@ -379,22 +379,22 @@ int RbInsert (struct RbTree* rbTree, int key) {
 
 int RbErase(struct RbTree* rbTree, int key);
 
-int RbFind(const struct RbTree* rbTree, int key, struct RbNode* rbNode) {
+int RbFind(const struct RbTree* rbTree, int key, struct RbNode** rbNode) {
     if (rbTree == NULL)
         return RB_EINVAL;
 
-    rbNode = rbTree->root;
+    *rbNode = rbTree->root;
 
-    while (rbNode != rbTree->nil) {
-        if (rbNode->key > key)
-            rbNode = rbNode->left;
-        else if (rbNode->key < key)
-            rbNode = rbNode->right;
+    while (*rbNode != rbTree->nil) {
+        if ((*rbNode)->key > key)
+            *rbNode = (*rbNode)->left;
+        else if ((*rbNode)->key < key)
+            *rbNode = (*rbNode)->right;
         else 
             return 0;
     }
 
-    rbNode = NULL;
+    *rbNode = NULL;
     return 0;
 }
 
