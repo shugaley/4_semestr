@@ -463,4 +463,3 @@ int RbDump(FILE* fileDot, const struct RbTree* rbTree) {
 
     return 0;
 }
-
