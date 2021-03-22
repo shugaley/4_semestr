@@ -1,2 +1,6 @@
 
 /rb_tree/.vscode/
+/rb_tree/build/
+/rb_tree/exec/
+
+/multithread-integration/build/

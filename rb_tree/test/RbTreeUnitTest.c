@@ -25,10 +25,10 @@ static int SumKeys(struct RbTree* rbTree, struct RbNode* n, int* sum);
 
 static void TestCalloc() {
     struct RbTree* rbTree = NULL;
-    
+
     assert(RbConstruct(&rbTree) == RB_ENOMEM);
     assert(RbConstruct(&rbTree) == RB_ENOMEM);
-    
+
     assert(RbConstruct(&rbTree)     == 0);
     assert(RbInsert(rbTree, rand()) == RB_ENOMEM);
     assert(RbInsert(rbTree, rand()) == 0);
@@ -39,7 +39,7 @@ static void TestCalloc() {
 static void TestEinval() {
     assert(RbConstruct(NULL)           == RB_EINVAL);
     assert(RbInsert(NULL, rand())      == RB_EINVAL);
-    assert(RbFind(NULL, rand(), NULL)  == RB_EINVAL); 
+    assert(RbFind(NULL, rand(), NULL)  == RB_EINVAL);
     assert(RbGetKey(NULL, NULL)        == RB_EINVAL);
     assert(RbForeach(NULL, NULL, NULL) == RB_EINVAL);
     assert(RbDump(NULL, NULL)          == RB_EINVAL);
@@ -62,9 +62,9 @@ static void TestForeach() {
     FillTree(rbTree);
 
     int sumKeys = 0;
-    assert(RbForeach(rbTree, 
-                     (int(*)(struct RbTree*, struct RbNode*, void*))SumKeys, 
-                     &sumKeys) 
+    assert(RbForeach(rbTree,
+                     (int(*)(struct RbTree*, struct RbNode*, void*))SumKeys,
+                     &sumKeys)
             == 0);
 
     assert(RbDestructor(rbTree) == 0);
@@ -119,7 +119,7 @@ static int SumKeys(struct RbTree* rbTree, struct RbNode* n, int* sum) {
 
 void RbTestAll() {
     srand(time(NULL));
-    
+
     TestCalloc();
     TestEinval();
     TestInsert();
