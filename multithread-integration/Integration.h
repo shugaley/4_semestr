@@ -6,6 +6,7 @@
 enum IntegrationErrno {
     INTEGRATION_EINVAL = 1,
     INTEGRATION_ENOMEM = 2,
+    INTEGRATION_ESYS   = 3,
 };
 
 int Integrate(size_t nThreads, size_t* res);
