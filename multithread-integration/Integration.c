@@ -4,7 +4,7 @@
 
 #include "Integration.h"
 
-#define _GNU_SOURCE_
+#define _GNU_SOURCE
 #include <assert.h>
 #include <pthread.h>
 #include <sched.h>
@@ -15,10 +15,10 @@
 
 static const char TOPOLOGY_PATH[] =
                             "/sys/devices/system/cpu/cpu%zu/topology/core_id";
-static const size_t MAX_LEN_NUM_CPU = 3;
+//static const size_t MAX_LEN_NUM_CPU = 3;
 static const double BEGIN = 1;
-static const double END   = 10;
-static const double DELTA = 0.00001;
+static const double END   = 500;
+static const double DELTA = 0.0000001;
 
 struct CoreInfo {
     size_t  coreId;
@@ -43,6 +43,7 @@ struct ThreadInfo {
 //------------------------------------------------------------------------------
 
 static struct CoreInfo* MakeCoreInfos(size_t* size);
+static bool GetCoreId(size_t numCpu, size_t* coreId);
 
 static struct CoreInfo*
 FillCoreInfo(struct CoreInfo* CIs, size_t size, size_t coreId, size_t numCpu);
@@ -56,17 +57,22 @@ static struct CoreInfo*
 FindCoreInfo(struct CoreInfo* CIs, size_t size, size_t coreId);
 
 static void FreeCoreInfos(struct CoreInfo* CIs, size_t size);
-
 static void
-DumpCoreInfo(const struct CoreInfo* CIs, size_t size) __attribute_used__;
+DumpCoreInfos(const struct CoreInfo* CIs, size_t size) __attribute_used__;
 
 
 static void* AllocateThreadInfos(size_t nThread, size_t* sizeofTI);
 static void
 PrepareThreadInfos(void* TIs, size_t sizeofTI, size_t nThread,
                    const struct IntegrationInfo* II);
+static void
+DumpThreadInfos(void* TIs, size_t sizeofTI, size_t nThread) __attribute_used__;
+
 
 static bool MakePthreadAttr(pthread_attr_t* attr, struct CoreInfo* CI);
+static void* Calculate(void* TI);
+
+double Function(double x);
 
 // ---- CoreInfo ---------------------------------------------------------------
 
@@ -87,24 +93,13 @@ static struct CoreInfo* MakeCoreInfos(size_t* size) {
     }
 
     for (size_t iNumCpu = 0; iNumCpu < nCpus; iNumCpu++) {
-        char curTopologyPath[sizeof(TOPOLOGY_PATH) + MAX_LEN_NUM_CPU] = {};
-        sprintf(curTopologyPath, TOPOLOGY_PATH, iNumCpu);
-
-        FILE* topologyFile = fopen(curTopologyPath, "r");
-        if (topologyFile == NULL) {
-            perror("Error open topologyFile");
-            FreeCoreInfos(CIs, nCpus);
-            return NULL;
-        }
         size_t curCoreId = 0;
-        int ret = fscanf(topologyFile, "%zu", &curCoreId);
-        if (ret != 1) {
-            perror("Error fscanf topologyFile");
-            fclose(topologyFile);
+        bool ret = GetCoreId(iNumCpu, &curCoreId);
+        if (ret != true) {
+            perror("Error GetCoreId");
             FreeCoreInfos(CIs, nCpus);
             return NULL;
         }
-        fclose(topologyFile);
 
         struct CoreInfo* curCI = FillCoreInfo(CIs, nCpus, curCoreId, iNumCpu);
         if (curCI == NULL) {
@@ -121,6 +116,27 @@ static struct CoreInfo* MakeCoreInfos(size_t* size) {
     }
 
     return CIs;
+}
+
+static bool GetCoreId(size_t numCpu, size_t* coreId) {
+    assert(coreId);
+
+    //TODO mb size len
+    char curTopologyPath[sizeof(TOPOLOGY_PATH)] = {};
+    sprintf(curTopologyPath, TOPOLOGY_PATH, numCpu);
+
+    FILE* topologyFile = fopen(curTopologyPath, "r");
+    if (topologyFile == NULL)
+        return false;
+
+    int ret = fscanf(topologyFile, "%zu", coreId);
+    if (ret != 1) {
+        fclose(topologyFile);
+        return false;
+    }
+
+    fclose(topologyFile);
+    return true;
 }
 
 static struct CoreInfo*
@@ -208,7 +224,7 @@ static void FreeCoreInfos(struct CoreInfo* CIs, size_t size) {
     free(CIs);
 }
 
-static void DumpCoreInfo(const struct CoreInfo* CIs, size_t size) {
+static void DumpCoreInfos(const struct CoreInfo* CIs, size_t size) {
     assert(CIs);
 
     fprintf(stderr, "\n====== DUMP CI ======\n");
@@ -234,7 +250,7 @@ static void* AllocateThreadInfos(size_t nThread, size_t* sizeofTI) {
     if (sizeLine <= 0)
         return NULL;
 
-    *sizeofTI = sizeof(struct ThreadInfo) / sizeLine + 1;
+    *sizeofTI = (sizeof(struct ThreadInfo) / sizeLine + 1) * sizeLine;
 
     void* TIs = calloc(nThread, *sizeofTI);
     return TIs;
@@ -259,19 +275,60 @@ PrepareThreadInfos(void* TIs, size_t sizeofTI, size_t nThread,
     }
 }
 
+static void DumpThreadInfos(void* TIs, size_t sizeofTI, size_t nThread) {
+    assert(TIs);
+
+    fprintf(stderr, "\n==== Dump TI ====\n");
+    for (size_t iNumThread = 0; iNumThread < nThread; iNumThread++) {
+        struct ThreadInfo* curTI = TIs + iNumThread * sizeofTI;
+        fprintf(stderr, "---- numThread = %zu:", iNumThread);
+        fprintf(stderr, "from [%f] to [%f] with delta = %f\n",
+                curTI->II.begin, curTI->II.end, curTI->II.delta);
+        fprintf(stderr, "res = %f\n", curTI->res);
+    }
+}
+
 // ---- Other ------------------------------------------------------------------
 
 static bool MakePthreadAttr(pthread_attr_t* attr, struct CoreInfo* CI) {
     assert(attr);
     assert(CI);
+    assert(CI->cpus);
 
     size_t iNumCpu = CI->nBusyCpus % CI->nCpus;
     size_t cpu = CI->cpus[iNumCpu];
+    fprintf(stderr, "aaa %zu\n", cpu);
 
     cpu_set_t cpuSet = {};
     CPU_ZERO(&cpuSet);
     CPU_SET(cpu, &cpuSet);
-//TODO
+
+    int ret = pthread_attr_init(attr);
+    if (ret != 0)
+        return false;
+
+    ret = pthread_attr_setaffinity_np(attr, sizeof(cpuSet), &cpuSet);
+    if (ret != 0)
+        return false;
+
+    CI->nBusyCpus++;
+    return true;
+}
+
+static void* Calculate(void* ThreadInfo) {
+    assert(ThreadInfo);
+
+    struct ThreadInfo* TI = ThreadInfo;
+    double begin = TI->II.begin;
+    double end   = TI->II.end;
+    double delta = TI->II.delta;
+
+    double res = 0;
+    for (double x = begin; x < end; x += delta)
+        res += Function(x) * delta;
+
+    TI->res = res;
+    return NULL;
 }
 
 // ---- Func Database ----------------------------------------------------------
@@ -282,7 +339,7 @@ double Function(double x) {
 
 // ==== API ====================================================================
 
-int Integrate(size_t nThreads, size_t* res) {
+int Integrate(size_t nThreads, double* res) {
 
     if (res == NULL)
         return INTEGRATION_EINVAL;
@@ -302,15 +359,46 @@ int Integrate(size_t nThreads, size_t* res) {
                                  .delta = DELTA};
     PrepareThreadInfos(TIs, sizeofTI, nThreads, &II);
 
+    pthread_t* pthreads = (pthread_t*)calloc(nThreads, sizeof(*pthreads));
+    if (pthreads == NULL) {
+        perror("Bad calloc");
+        return INTEGRATION_ENOMEM;
+    }
+
     for (size_t iNumThread = 0; iNumThread < nThreads; iNumThread++) {
         size_t coreId = iNumThread % nCoreIds;
         struct CoreInfo* curCI = FindCoreInfo(CIs, nCoreIds, coreId);
-        if (curCI == NULL)
+        if (curCI == NULL) {
+            perror("Error FindCoreInfo");
             return INTEGRATION_ENOMEM;
+        }
 
+        pthread_attr_t attr = {};
+        bool retBool = MakePthreadAttr(&attr, curCI);
+        if (retBool != true) {
+            perror("Error MakePthreadAttr");
+            return INTEGRATION_ESYS;
+        }
 
+        int retInt = pthread_create(&pthreads[iNumThread], &attr, Calculate,
+                                 TIs + iNumThread * sizeofTI);
+        if (retInt != 0) {
+            perror("Error pthread_create");
+            return INTEGRATION_ESYS;
+        }
     }
 
+    for (size_t iNumThread = 0; iNumThread < nThreads; iNumThread++) {
+        int ret = pthread_join(pthreads[iNumThread], NULL);
+        if (ret != 0) {
+            perror("Pthread join");
+            return INTEGRATION_ESYS;
+        }
+        *res += ((struct ThreadInfo*)(TIs + iNumThread * sizeofTI))->res;
+    }
+    //DumpThreadInfos(TIs, sizeofTI, nThreads);
+
+    free(pthreads);
     free(TIs);
     FreeCoreInfos(CIs, nCoreIds);
 

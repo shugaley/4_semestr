@@ -19,11 +19,11 @@ int main(int argc, char** argv) {
         exit(EXIT_FAILURE);
     }
 
-    size_t res = 0;
+    double res = 0;
     int ret = Integrate(nThreads, &res);
     if (ret != 0)
         exit(EXIT_FAILURE);
-    printf("%zu\n", res);
+    printf("%f\n", res);
 
     return 0;
 }

@@ -9,6 +9,7 @@ enum IntegrationErrno {
     INTEGRATION_ESYS   = 3,
 };
 
-int Integrate(size_t nThreads, size_t* res);
+
+int Integrate(size_t nThreads, double* res);
 
 #endif // MULTITHREAD_INTEGRATION_INTEGRATION_H
