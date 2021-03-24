@@ -22,7 +22,7 @@ static const double DELTA = 0.0000001;
 
 struct CoreInfo {
     size_t  coreId;
-    size_t* cpus;
+    size_t* numCpus;
     size_t  nBusyCpus;
 
     size_t  nCpus;
@@ -153,15 +153,15 @@ FillCoreInfo(struct CoreInfo* CIs, size_t size, size_t coreId, size_t numCpu) {
     }
 
     if (curCI->nCpus == curCI->nAllocCpus) {
-        curCI->cpus = (size_t*)realloc(curCI->cpus,
+        curCI->numCpus = (size_t*)realloc(curCI->numCpus,
                                        2 * curCI->nAllocCpus *
-                                       sizeof(*(curCI->cpus)));
-        if (curCI->cpus == NULL)
+                                       sizeof(*(curCI->numCpus)));
+        if (curCI->numCpus == NULL)
             return NULL;
         curCI->nAllocCpus = 2 * curCI->nAllocCpus;
     }
 
-    curCI->cpus[curCI->nCpus] = numCpu;
+    curCI->numCpus[curCI->nCpus] = numCpu;
     curCI->nCpus++;
 
     return curCI;
@@ -176,8 +176,8 @@ CreateNewCoreInfo(struct CoreInfo* CIs, size_t size) {
         if (CIs[iNumCI].nCpus == 0)
             curCI = &CIs[iNumCI];
 
-    curCI->cpus = (size_t*)calloc(1, sizeof(*(curCI->cpus)));
-    if (curCI->cpus == NULL)
+    curCI->numCpus = (size_t*)calloc(1, sizeof(*(curCI->numCpus)));
+    if (curCI->numCpus == NULL)
         return NULL;
     curCI->nAllocCpus = 1;
 
@@ -192,7 +192,7 @@ DeleteRedundantCoreInfos(struct CoreInfo** ptrCIs, size_t oldSize) {
     size_t newSize = oldSize;
     for (size_t iNumCI = 0; iNumCI < oldSize; iNumCI++)
         if (CIs[iNumCI].nCpus == 0) {
-            free(CIs[iNumCI].cpus);
+            free(CIs[iNumCI].numCpus);
             newSize--;
         }
     CIs = (struct CoreInfo*)realloc(CIs, newSize * sizeof(*CIs));
@@ -219,7 +219,7 @@ static void FreeCoreInfos(struct CoreInfo* CIs, size_t size) {
     assert(CIs);
 
     for (size_t iNumCI = 0; iNumCI < size; iNumCI++)
-        free(CIs[iNumCI].cpus);
+        free(CIs[iNumCI].numCpus);
 
     free(CIs);
 }
@@ -233,10 +233,10 @@ static void DumpCoreInfos(const struct CoreInfo* CIs, size_t size) {
         fprintf(stderr, "nCpus = %zu, ",      CIs[iNumCI].nCpus);
         fprintf(stderr, "nAllocCpus = %zu, ", CIs[iNumCI].nAllocCpus);
         fprintf(stderr, "nBusyCpus = %zu:\n", CIs[iNumCI].nBusyCpus);
-        fprintf(stderr, "cpus : [");
-        assert(CIs[iNumCI].cpus);
+        fprintf(stderr, "numCpus : [");
+        assert(CIs[iNumCI].numCpus);
         for (size_t iNumCpu = 0; iNumCpu < CIs[iNumCI].nCpus; iNumCpu++)
-            fprintf(stderr, " %zu", CIs[iNumCI].cpus[iNumCpu]);
+            fprintf(stderr, " %zu", CIs[iNumCI].numCpus[iNumCpu]);
         fprintf(stderr, "]\n");
     }
 }
@@ -293,21 +293,21 @@ static void DumpThreadInfos(void* TIs, size_t sizeofTI, size_t nThread) {
 static bool MakePthreadAttr(pthread_attr_t* attr, struct CoreInfo* CI) {
     assert(attr);
     assert(CI);
-    assert(CI->cpus);
+    assert(CI->numCpus);
 
     size_t iNumCpu = CI->nBusyCpus % CI->nCpus;
-    size_t cpu = CI->cpus[iNumCpu];
-    fprintf(stderr, "aaa %zu\n", cpu);
+    size_t numCpu = CI->numCpus[iNumCpu];
+    fprintf(stderr, "aaa %zu\n", numCpu);
 
-    cpu_set_t cpuSet = {};
-    CPU_ZERO(&cpuSet);
-    CPU_SET(cpu, &cpuSet);
+    cpu_set_t cpu = {};
+    CPU_ZERO(&cpu);
+    CPU_SET(numCpu, &cpu);
 
     int ret = pthread_attr_init(attr);
     if (ret != 0)
         return false;
 
-    ret = pthread_attr_setaffinity_np(attr, sizeof(cpuSet), &cpuSet);
+    ret = pthread_attr_setaffinity_np(attr, sizeof(cpu), &cpu);
     if (ret != 0)
         return false;
 
@@ -384,8 +384,11 @@ int Integrate(size_t nThreads, double* res) {
                                  TIs + iNumThread * sizeofTI);
         if (retInt != 0) {
             perror("Error pthread_create");
+            pthread_attr_destroy(&attr);
             return INTEGRATION_ESYS;
         }
+
+        pthread_attr_destroy(&attr);
     }
 
     for (size_t iNumThread = 0; iNumThread < nThreads; iNumThread++) {
