@@ -16,6 +16,9 @@
 static const char TOPOLOGY_PATH[] =
                             "/sys/devices/system/cpu/cpu%zu/topology/core_id";
 //static const size_t MAX_LEN_NUM_CPU = 3;
+
+//! Can be only 0
+static const size_t NUM_CPU_MAIN_THREAD = 0;
 static const double BEGIN = 1;
 static const double END   = 500;
 static const double DELTA = 0.0000001;
@@ -43,7 +46,7 @@ struct ThreadInfo {
 //------------------------------------------------------------------------------
 
 static struct CoreInfo* MakeCoreInfos(size_t* size);
-static bool GetCoreId(size_t numCpu, size_t* coreId);
+static bool ParseCoreId(size_t numCpu, size_t* coreId);
 
 static struct CoreInfo*
 FillCoreInfo(struct CoreInfo* CIs, size_t size, size_t coreId, size_t numCpu);
@@ -68,6 +71,9 @@ PrepareThreadInfos(void* TIs, size_t sizeofTI, size_t nThread,
 static void
 DumpThreadInfos(void* TIs, size_t sizeofTI, size_t nThread) __attribute_used__;
 
+
+static struct CoreInfo*
+SwitchCpuSelfPthread(struct CoreInfo* CIs, size_t nCoreIds, size_t numCpu);
 
 static bool MakePthreadAttr(pthread_attr_t* attr, struct CoreInfo* CI);
 static void* Calculate(void* TI);
@@ -94,9 +100,9 @@ static struct CoreInfo* MakeCoreInfos(size_t* size) {
 
     for (size_t iNumCpu = 0; iNumCpu < nCpus; iNumCpu++) {
         size_t curCoreId = 0;
-        bool ret = GetCoreId(iNumCpu, &curCoreId);
+        bool ret = ParseCoreId(iNumCpu, &curCoreId);
         if (ret != true) {
-            perror("Error GetCoreId");
+            perror("Error ParseCoreId");
             FreeCoreInfos(CIs, nCpus);
             return NULL;
         }
@@ -118,7 +124,7 @@ static struct CoreInfo* MakeCoreInfos(size_t* size) {
     return CIs;
 }
 
-static bool GetCoreId(size_t numCpu, size_t* coreId) {
+static bool ParseCoreId(size_t numCpu, size_t* coreId) {
     assert(coreId);
 
     //TODO mb size len
@@ -290,14 +296,35 @@ static void DumpThreadInfos(void* TIs, size_t sizeofTI, size_t nThread) {
 
 // ---- Other ------------------------------------------------------------------
 
+//! numCpu can be only 0
+static struct CoreInfo*
+SwitchCpuSelfPthread(struct CoreInfo* CIs, size_t nCoreIds, size_t numCpu) {
+    assert(CIs);
+
+    cpu_set_t cpu = {};
+    CPU_ZERO(&cpu);
+    CPU_SET(numCpu, &cpu);
+
+    pthread_t pthread = pthread_self();
+    int ret = pthread_setaffinity_np(pthread, sizeof(cpu), &cpu);
+    if (ret < 0)
+        return NULL;
+
+    // TODO search CI by numCpu
+    struct CoreInfo* CI = &(CIs[0]);
+    CI->nBusyCpus++;
+
+    return CI;
+}
+
 static bool MakePthreadAttr(pthread_attr_t* attr, struct CoreInfo* CI) {
     assert(attr);
     assert(CI);
     assert(CI->numCpus);
 
     size_t iNumCpu = CI->nBusyCpus % CI->nCpus;
-    size_t numCpu = CI->numCpus[iNumCpu];
-    fprintf(stderr, "aaa %zu\n", numCpu);
+    size_t numCpu  = CI->numCpus[iNumCpu];
+    //fprintf(stderr, "aaa %zu\n", numCpu);
 
     cpu_set_t cpu = {};
     CPU_ZERO(&cpu);
@@ -340,19 +367,23 @@ double Function(double x) {
 // ==== API ====================================================================
 
 int Integrate(size_t nThreads, double* res) {
-
     if (res == NULL)
         return INTEGRATION_EINVAL;
 
     size_t nCoreIds = 0;
     struct CoreInfo* CIs = MakeCoreInfos(&nCoreIds);
-    if (CIs == NULL)
+    if (CIs == NULL) {
+        perror("Error create CIs");
         return INTEGRATION_ENOMEM;
+    }
 
     size_t sizeofTI = 0;
     void* TIs = AllocateThreadInfos(nThreads, &sizeofTI);
-    if (TIs == NULL)
+    if (TIs == NULL) {
+        perror("Error Allocate TIs");
+        FreeCoreInfos(CIs, nCoreIds);
         return INTEGRATION_ENOMEM;
+    }
 
     struct IntegrationInfo II = {.begin = BEGIN,
                                  .end = END,
@@ -362,29 +393,50 @@ int Integrate(size_t nThreads, double* res) {
     pthread_t* pthreads = (pthread_t*)calloc(nThreads, sizeof(*pthreads));
     if (pthreads == NULL) {
         perror("Bad calloc");
+        free(TIs);
+        FreeCoreInfos(CIs, nCoreIds);
         return INTEGRATION_ENOMEM;
     }
 
+    struct CoreInfo* mainCI = SwitchCpuSelfPthread(CIs, nCoreIds,
+                                                   NUM_CPU_MAIN_THREAD);
+    if (mainCI == NULL) {
+        perror("Error switch main pthread");
+        free(pthreads);
+        free(TIs);
+        FreeCoreInfos(CIs, nCoreIds);
+        return INTEGRATION_ESYS;
+    }
+
     for (size_t iNumThread = 0; iNumThread < nThreads; iNumThread++) {
-        size_t coreId = iNumThread % nCoreIds;
+        size_t coreId = (iNumThread + mainCI->coreId + 1) % nCoreIds;
         struct CoreInfo* curCI = FindCoreInfo(CIs, nCoreIds, coreId);
         if (curCI == NULL) {
             perror("Error FindCoreInfo");
+            free(pthreads);
+            free(TIs);
+            FreeCoreInfos(CIs, nCoreIds);
             return INTEGRATION_ENOMEM;
         }
 
         pthread_attr_t attr = {};
-        bool retBool = MakePthreadAttr(&attr, curCI);
-        if (retBool != true) {
+        int ret = MakePthreadAttr(&attr, curCI);
+        if (ret != true) {
             perror("Error MakePthreadAttr");
+            free(pthreads);
+            free(TIs);
+            FreeCoreInfos(CIs, nCoreIds);
             return INTEGRATION_ESYS;
         }
 
-        int retInt = pthread_create(&pthreads[iNumThread], &attr, Calculate,
+        ret = pthread_create(&pthreads[iNumThread], &attr, Calculate,
                                  TIs + iNumThread * sizeofTI);
-        if (retInt != 0) {
+        if (ret != 0) {
             perror("Error pthread_create");
             pthread_attr_destroy(&attr);
+            free(pthreads);
+            free(TIs);
+            FreeCoreInfos(CIs, nCoreIds);
             return INTEGRATION_ESYS;
         }
 
@@ -394,6 +446,9 @@ int Integrate(size_t nThreads, double* res) {
     for (size_t iNumThread = 0; iNumThread < nThreads; iNumThread++) {
         int ret = pthread_join(pthreads[iNumThread], NULL);
         if (ret != 0) {
+            free(pthreads);
+            free(TIs);
+            FreeCoreInfos(CIs, nCoreIds);
             perror("Pthread join");
             return INTEGRATION_ESYS;
         }
