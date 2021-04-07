@@ -18,8 +18,6 @@ static const char TOPOLOGY_PATH[] =
                             "/sys/devices/system/cpu/cpu%zu/topology/core_id";
 //static const size_t MAX_LEN_NUM_CPU = 3;
 
-//! Can be only 0
-static const size_t NUM_CPU_MAIN_THREAD = 0;
 static const double BEGIN = 1;
 static const double END   = 500;
 static const double DELTA = 0.0000001;
@@ -72,9 +70,6 @@ PrepareThreadInfos(void* TIs, size_t sizeofTI, size_t nThread,
 static void
 DumpThreadInfos(void* TIs, size_t sizeofTI, size_t nThread) __attribute_used__;
 
-
-static struct CoreInfo*
-SwitchCpuSelfPthread(struct CoreInfo* CIs, size_t nCoreIds, size_t numCpu);
 
 static bool MakePthreadAttr(pthread_attr_t* attr, struct CoreInfo* CI);
 static void* Calculate(void* TI);
@@ -297,27 +292,6 @@ static void DumpThreadInfos(void* TIs, size_t sizeofTI, size_t nThread) {
 
 // ---- Other ------------------------------------------------------------------
 
-//! numCpu can be only 0
-static struct CoreInfo*
-SwitchCpuSelfPthread(struct CoreInfo* CIs, size_t nCoreIds, size_t numCpu) {
-    assert(CIs);
-
-    cpu_set_t cpu = {};
-    CPU_ZERO(&cpu);
-    CPU_SET(numCpu, &cpu);
-
-    pthread_t pthread = pthread_self();
-    int ret = pthread_setaffinity_np(pthread, sizeof(cpu), &cpu);
-    if (ret < 0)
-        return NULL;
-
-    // TODO search CI by numCpu
-    struct CoreInfo* CI = &(CIs[0]);
-    CI->nBusyCpus++;
-
-    return CI;
-}
-
 static bool MakePthreadAttr(pthread_attr_t* attr, struct CoreInfo* CI) {
     assert(attr);
     assert(CI);
@@ -407,16 +381,8 @@ int Integrate(size_t nThreads, double* res) {
         goto outFreeTIs;
     }
 
-    struct CoreInfo* mainCI = SwitchCpuSelfPthread(CIs, nCoreIds,
-                                                   NUM_CPU_MAIN_THREAD);
-    if (mainCI == NULL) {
-        perror("Error switch main pthread");
-        ret = INTEGRATION_ESYS;
-        goto outFreePthreads;
-    }
-
     for (size_t iNumThread = 0; iNumThread < nThreads; iNumThread++) {
-        size_t coreId = (iNumThread + mainCI->coreId + 1) % nCoreIds;
+        size_t coreId = iNumThread % nCoreIds;
         struct CoreInfo* curCI = FindCoreInfo(CIs, nCoreIds, coreId);
         if (curCI == NULL) {
             perror("Error FindCoreInfo");
