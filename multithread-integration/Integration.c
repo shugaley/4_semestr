@@ -18,6 +18,8 @@ static const char TOPOLOGY_PATH[] =
                             "/sys/devices/system/cpu/cpu%zu/topology/core_id";
 //static const size_t MAX_LEN_NUM_CPU = 3;
 
+//! Can be only 0
+static const size_t NUM_CPU_MAIN_THREAD = 0;
 static const double BEGIN = 1;
 static const double END   = 500;
 static const double DELTA = 0.0000001;
@@ -42,6 +44,12 @@ struct ThreadInfo {
     double res;
 };
 
+struct Array {
+    void* data;
+    size_t sizeOf;
+    size_t size;
+};
+
 //------------------------------------------------------------------------------
 
 static struct CoreInfo* MakeCoreInfos(size_t* size);
@@ -63,13 +71,15 @@ static void
 DumpCoreInfos(const struct CoreInfo* CIs, size_t size) __attribute_used__;
 
 
-static void* AllocateThreadInfos(size_t nThread, size_t* sizeofTI);
+static void AllocateThreadInfos(struct Array* TIs, size_t nThreads);
 static void
-PrepareThreadInfos(void* TIs, size_t sizeofTI, size_t nThread,
-                   const struct IntegrationInfo* II);
+PrepareThreadInfos(struct Array* TIs, const struct IntegrationInfo* II);
 static void
 DumpThreadInfos(void* TIs, size_t sizeofTI, size_t nThread) __attribute_used__;
 
+
+static struct CoreInfo*
+SwitchCpuSelfPthread(struct CoreInfo* CIs, size_t nCoreIds, size_t numCpu);
 
 static bool MakePthreadAttr(pthread_attr_t* attr, struct CoreInfo* CI);
 static void* Calculate(void* TI);
@@ -245,35 +255,38 @@ static void DumpCoreInfos(const struct CoreInfo* CIs, size_t size) {
 
 // ---- Thread Info ------------------------------------------------------------
 
-static void* AllocateThreadInfos(size_t nThread, size_t* sizeofTI) {
-    assert(sizeofTI);
+static void AllocateThreadInfos(struct Array* TIs, size_t nThreads) {
+    assert(TIs);
 
     long sizeLine = sysconf(_SC_LEVEL1_DCACHE_LINESIZE);
-    if (sizeLine <= 0)
-        return NULL;
+    if (sizeLine <= 0) {
+        TIs->data = NULL;
+        return;
+    }
 
-    *sizeofTI = (sizeof(struct ThreadInfo) / sizeLine + 1) * sizeLine;
+    TIs->sizeOf = (sizeof(struct ThreadInfo) / sizeLine + 1) * sizeLine;
+    TIs->size = nThreads;
 
-    void* TIs = calloc(nThread, *sizeofTI);
-    return TIs;
+    TIs->data = calloc(TIs->size, TIs->sizeOf);
 }
 
 static void
-PrepareThreadInfos(void* TIs, size_t sizeofTI, size_t nThread,
-                   const struct IntegrationInfo* II) {
+PrepareThreadInfos(struct Array* TIs, const struct IntegrationInfo* II) {
     assert(TIs);
     assert(II);
     assert(II->end - II->begin > 0);
 
+    size_t nThread = TIs->size;
     double step = (II->end - II->begin) / nThread;
     for (size_t iNumThread = 0; iNumThread < nThread; iNumThread++) {
         double iBegin = II->begin + iNumThread * step;
         double iEnd   = II->begin + (iNumThread + 1) * step;
         double  iDelta = II->delta;
 
-        ((struct ThreadInfo*)(TIs + iNumThread * sizeofTI))->II.begin = iBegin;
-        ((struct ThreadInfo*)(TIs + iNumThread * sizeofTI))->II.end   = iEnd;
-        ((struct ThreadInfo*)(TIs + iNumThread * sizeofTI))->II.delta = iDelta;
+        struct ThreadInfo* iThreadInfo = TIs->data + iNumThread * TIs->sizeOf;
+        iThreadInfo->II.begin = iBegin;
+        iThreadInfo->II.end   = iEnd;
+        iThreadInfo->II.delta = iDelta;
     }
 }
 
@@ -291,6 +304,27 @@ static void DumpThreadInfos(void* TIs, size_t sizeofTI, size_t nThread) {
 }
 
 // ---- Other ------------------------------------------------------------------
+
+//! numCpu can be only 0
+static struct CoreInfo*
+SwitchCpuSelfPthread(struct CoreInfo* CIs, size_t nCoreIds, size_t numCpu) {
+    assert(CIs);
+
+    cpu_set_t cpu = {};
+    CPU_ZERO(&cpu);
+    CPU_SET(numCpu, &cpu);
+
+    pthread_t pthread = pthread_self();
+    int ret = pthread_setaffinity_np(pthread, sizeof(cpu), &cpu);
+    if (ret < 0)
+        return NULL;
+
+    // TODO search CI by numCpu
+    struct CoreInfo* CI = &(CIs[0]);
+    CI->nBusyCpus++;
+
+    return CI;
+}
 
 static bool MakePthreadAttr(pthread_attr_t* attr, struct CoreInfo* CI) {
     assert(attr);
@@ -359,9 +393,9 @@ int Integrate(size_t nThreads, double* res) {
         goto out;
     }
 
-    size_t sizeofTI = 0;
-    void* TIs = AllocateThreadInfos(nThreads, &sizeofTI);
-    if (TIs == NULL) {
+    struct Array TIs = {};
+    AllocateThreadInfos(&TIs, nThreads);
+    if (TIs.data == NULL) {
         perror("Error Allocate TIs");
         ret = INTEGRATION_ENOMEM;
         goto outFreeCIs;
@@ -372,7 +406,7 @@ int Integrate(size_t nThreads, double* res) {
         .end = END,
         .delta = DELTA
     };
-    PrepareThreadInfos(TIs, sizeofTI, nThreads, &II);
+    PrepareThreadInfos(&TIs, &II);
 
     pthread_t* pthreads = (pthread_t*)calloc(nThreads, sizeof(*pthreads));
     if (pthreads == NULL) {
@@ -381,8 +415,16 @@ int Integrate(size_t nThreads, double* res) {
         goto outFreeTIs;
     }
 
+    struct CoreInfo* mainCI = SwitchCpuSelfPthread(CIs, nCoreIds,
+                                                   NUM_CPU_MAIN_THREAD);
+    if (mainCI == NULL) {
+        perror("Error switch main pthread");
+        ret = INTEGRATION_ESYS;
+        goto outFreePthreads;
+    }
+
     for (size_t iNumThread = 0; iNumThread < nThreads; iNumThread++) {
-        size_t coreId = iNumThread % nCoreIds;
+        size_t coreId = (iNumThread + mainCI->coreId + 1) % nCoreIds;
         struct CoreInfo* curCI = FindCoreInfo(CIs, nCoreIds, coreId);
         if (curCI == NULL) {
             perror("Error FindCoreInfo");
@@ -398,8 +440,9 @@ int Integrate(size_t nThreads, double* res) {
             goto outFreePthreads;
         }
 
-        check = pthread_create(&pthreads[iNumThread], &attr, Calculate,
-                               TIs + iNumThread * sizeofTI);
+        struct ThreadInfo* iThreadInfo = TIs.data + iNumThread * TIs.sizeOf;
+        check = pthread_create(&pthreads[iNumThread], &attr,
+                               Calculate, iThreadInfo);
         if (check != 0) {
             perror("Error pthread_create");
             pthread_attr_destroy(&attr);
@@ -419,14 +462,15 @@ outPthreadJoin:
             ret = INTEGRATION_ESYS;
             goto outFreePthreads;
         }
-        *res += ((struct ThreadInfo*)(TIs + iNumThread * sizeofTI))->res;
+        struct ThreadInfo* iThreadInfo = TIs.data + iNumThread * TIs.sizeOf;
+        *res += iThreadInfo->res;
     }
     //DumpThreadInfos(TIs, sizeofTI, nThreads);
 
 outFreePthreads:
     free(pthreads);
 outFreeTIs:
-    free(TIs);
+    free(TIs.data);
 outFreeCIs:
     FreeCoreInfos(CIs, nCoreIds);
 out:
