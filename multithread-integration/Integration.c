@@ -6,6 +6,7 @@
 
 #define _GNU_SOURCE
 #include <assert.h>
+#include <errno.h>
 #include <pthread.h>
 #include <sched.h>
 #include <stdbool.h>
@@ -367,45 +368,51 @@ double Function(double x) {
 // ==== API ====================================================================
 
 int Integrate(size_t nThreads, double* res) {
-    if (res == NULL)
-        return INTEGRATION_EINVAL;
+    int ret = 0;
+    errno = 0;
+
+    if (res == NULL) {
+        perror("Bad args");
+        ret = INTEGRATION_EINVAL;
+        goto out;
+    }
 
     size_t nCoreIds = 0;
     struct CoreInfo* CIs = MakeCoreInfos(&nCoreIds);
     if (CIs == NULL) {
         perror("Error create CIs");
-        return INTEGRATION_ENOMEM;
+        ret = INTEGRATION_ENOMEM;
+        goto out;
     }
 
     size_t sizeofTI = 0;
     void* TIs = AllocateThreadInfos(nThreads, &sizeofTI);
     if (TIs == NULL) {
         perror("Error Allocate TIs");
-        FreeCoreInfos(CIs, nCoreIds);
-        return INTEGRATION_ENOMEM;
+        ret = INTEGRATION_ENOMEM;
+        goto outFreeCIs;
     }
 
-    struct IntegrationInfo II = {.begin = BEGIN,
-                                 .end = END,
-                                 .delta = DELTA};
+    struct IntegrationInfo II = {
+        .begin = BEGIN,
+        .end = END,
+        .delta = DELTA
+    };
     PrepareThreadInfos(TIs, sizeofTI, nThreads, &II);
 
     pthread_t* pthreads = (pthread_t*)calloc(nThreads, sizeof(*pthreads));
     if (pthreads == NULL) {
         perror("Bad calloc");
-        free(TIs);
-        FreeCoreInfos(CIs, nCoreIds);
-        return INTEGRATION_ENOMEM;
+        ret = INTEGRATION_ENOMEM;
+        goto outFreeTIs;
     }
 
     struct CoreInfo* mainCI = SwitchCpuSelfPthread(CIs, nCoreIds,
                                                    NUM_CPU_MAIN_THREAD);
     if (mainCI == NULL) {
         perror("Error switch main pthread");
-        free(pthreads);
-        free(TIs);
-        FreeCoreInfos(CIs, nCoreIds);
-        return INTEGRATION_ESYS;
+        ret = INTEGRATION_ESYS;
+        goto outFreePthreads;
     }
 
     for (size_t iNumThread = 0; iNumThread < nThreads; iNumThread++) {
@@ -413,52 +420,50 @@ int Integrate(size_t nThreads, double* res) {
         struct CoreInfo* curCI = FindCoreInfo(CIs, nCoreIds, coreId);
         if (curCI == NULL) {
             perror("Error FindCoreInfo");
-            free(pthreads);
-            free(TIs);
-            FreeCoreInfos(CIs, nCoreIds);
-            return INTEGRATION_ENOMEM;
+            ret = INTEGRATION_ENOMEM;
+            goto outFreePthreads;
         }
 
         pthread_attr_t attr = {};
-        int ret = MakePthreadAttr(&attr, curCI);
-        if (ret != true) {
+        int check = MakePthreadAttr(&attr, curCI);
+        if (check != true) {
             perror("Error MakePthreadAttr");
-            free(pthreads);
-            free(TIs);
-            FreeCoreInfos(CIs, nCoreIds);
-            return INTEGRATION_ESYS;
+            ret = INTEGRATION_ESYS;
+            goto outFreePthreads;
         }
 
-        ret = pthread_create(&pthreads[iNumThread], &attr, Calculate,
-                                 TIs + iNumThread * sizeofTI);
-        if (ret != 0) {
+        check = pthread_create(&pthreads[iNumThread], &attr, Calculate,
+                               TIs + iNumThread * sizeofTI);
+        if (check != 0) {
             perror("Error pthread_create");
             pthread_attr_destroy(&attr);
-            free(pthreads);
-            free(TIs);
-            FreeCoreInfos(CIs, nCoreIds);
-            return INTEGRATION_ESYS;
+            ret = INTEGRATION_ESYS;
+            nThreads = iNumThread;
+            goto outPthreadJoin;
         }
 
         pthread_attr_destroy(&attr);
     }
 
+outPthreadJoin:
     for (size_t iNumThread = 0; iNumThread < nThreads; iNumThread++) {
-        int ret = pthread_join(pthreads[iNumThread], NULL);
-        if (ret != 0) {
-            free(pthreads);
-            free(TIs);
-            FreeCoreInfos(CIs, nCoreIds);
+        int check = pthread_join(pthreads[iNumThread], NULL);
+        if (check != 0) {
             perror("Pthread join");
-            return INTEGRATION_ESYS;
+            ret = INTEGRATION_ESYS;
+            goto outFreePthreads;
         }
         *res += ((struct ThreadInfo*)(TIs + iNumThread * sizeofTI))->res;
     }
     //DumpThreadInfos(TIs, sizeofTI, nThreads);
 
+outFreePthreads:
     free(pthreads);
+outFreeTIs:
     free(TIs);
+outFreeCIs:
     FreeCoreInfos(CIs, nCoreIds);
+out:
 
-    return 0;
+    return ret;
 }
